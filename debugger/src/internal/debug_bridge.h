@@ -55,8 +55,11 @@ class DebugBridge final {
 
   // Called from **lua runtime** after lua file is loaded
   // Assume that the top closure from file is already on
-  // the stack
-  void onLuaFileLoaded(lua_State* L, std::string_view path, bool is_entry);
+  // the stack.
+  // line_offset: number of lines prepended before the real file content in the
+  // compiled chunk (e.g. shared prelude line count + 1 separator).
+  void onLuaFileLoaded(lua_State* L, std::string_view path, bool is_entry,
+                       int line_offset = 0);
 
   // Called from **lua runtime** when debug break encountered
   enum class BreakReason { Step, BreakPoint, Entry, Pause };

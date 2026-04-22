@@ -240,13 +240,15 @@ void DebugBridge::pause() {
 
 void DebugBridge::onLuaFileLoaded(lua_State* L,
                                   std::string_view path,
-                                  bool is_entry) {
+                                  bool is_entry,
+                                  int line_offset) {
   auto normalized_path = file_mapping_.normalize(path);
 
   auto it = files_.find(normalized_path);
   if (it == files_.end()) {
     File file;
     file.setPath(normalized_path);
+    file.setLineOffset(line_offset);
     file.addRef(LuaFileRef(L));
 
     DEBUGGER_LOG_INFO("[onLuaFileLoaded] New file loaded: {}", normalized_path);
@@ -256,12 +258,20 @@ void DebugBridge::onLuaFileLoaded(lua_State* L,
         "[onLuaFileLoaded] File already loaded, replace with new: {}",
         normalized_path);
 
+    // The file entry may have been pre-created by setBreakPoints with IDE-line
+    // breakpoints (offset 0).  Remap them into stitched-source line space
+    // before activating the Lua file reference.
+    if (line_offset != 0)
+      it->second.remapBreakpoints(line_offset);
+
     it->second.addRef(LuaFileRef(L));
   }
 
   if (is_entry && stop_on_entry_) {
-    it->second.addBreakPoint(1);
-    file_mapping_.setEntryPath(std::move(normalized_path));
+    int entry_line = line_offset + 1;
+    it->second.addBreakPoint(entry_line);
+    file_mapping_.setEntryPath(normalized_path);
+    file_mapping_.setEntryBpLine(entry_line);
   }
 }
 
@@ -283,13 +293,6 @@ void DebugBridge::setBreakPoints(
     }
 
     auto it = files_.find(normalized_path);
-    std::unordered_map<int, BreakPoint> bps;
-    for (const auto& breakpoint : *breakpoints) {
-      auto bp = BreakPoint::create(breakpoint.line);
-      if (breakpoint.condition.has_value())
-        bp.setCondition(breakpoint.condition.value());
-      bps.emplace(static_cast<int>(breakpoint.line), std::move(bp));
-    }
 
     if (it == files_.end()) {
       DEBUGGER_LOG_INFO("[setBreakPoint] create new file with breakpoints: {}",
@@ -297,12 +300,24 @@ void DebugBridge::setBreakPoints(
 
       File file;
       file.setPath(normalized_path);
-      it = files_.emplace(normalized_path, File()).first;
+      it = files_.emplace(normalized_path, std::move(file)).first;
     } else
       DEBUGGER_LOG_INFO("[setBreakPoint] file already loaded: {}",
                         normalized_path);
 
     auto& file = it->second;
+    // If file already has an offset (loaded with stitched source), map IDE
+    // lines into stitched-source space.  If not yet loaded (offset 0), store
+    // at IDE lines; remapBreakpoints() in onLuaFileLoaded will shift them.
+    int offset = file.lineOffset();
+    std::unordered_map<int, BreakPoint> bps;
+    for (const auto& breakpoint : *breakpoints) {
+      int stitched = static_cast<int>(breakpoint.line) + offset;
+      auto bp = BreakPoint::create(stitched);
+      if (breakpoint.condition.has_value())
+        bp.setCondition(breakpoint.condition.value());
+      bps.emplace(stitched, std::move(bp));
+    }
     file.setBreakPoints(bps);
   });
 }
@@ -333,7 +348,7 @@ bool DebugBridge::isBreakOnEntry(lua_State* L) {
   auto it = files_.find(file_mapping_.entryPath());
   if (it == files_.end())
     return false;
-  auto* bp = it->second.findBreakPoint(1);
+  auto* bp = it->second.findBreakPoint(file_mapping_.entryBpLine());
   if (bp == nullptr)
     return false;
 
@@ -602,9 +617,15 @@ std::vector<StackFrame> DebugBridge::updateStackFrames(lua_State* L) {
       StackFrame frame;
       frame.name = ar.name ? ar.name : "anonymous";
       frame.source = Source{};
-      if (ar.source)
-        frame.source->path = file_mapping_.normalize(ar.source);
-      frame.line = ar.currentline;
+      int line_offset = 0;
+      if (ar.source) {
+        auto normalized = file_mapping_.normalize(ar.source);
+        frame.source->path = normalized;
+        auto fit = files_.find(normalized);
+        if (fit != files_.end())
+          line_offset = fit->second.lineOffset();
+      }
+      frame.line = ar.currentline - line_offset;
       frame.id = stack_frames_.size();
       frames.emplace_back(std::move(frame));
       stack_frames_.emplace_back(StackFrameInfo{src, depth});

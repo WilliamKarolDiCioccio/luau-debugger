@@ -72,6 +72,22 @@ void File::setPath(std::string path) {
   path_ = std::move(path);
 }
 
+void File::remapBreakpoints(int offset) {
+  if (offset == 0 || breakpoints_.empty())
+    return;
+  line_offset_ = offset;
+  std::unordered_map<int, BreakPoint> remapped;
+  for (auto& [ide_line, bp] : breakpoints_) {
+    int stitched = ide_line + offset;
+    auto new_bp = BreakPoint::create(stitched);
+    new_bp.setCondition(bp.condition());
+    remapped.emplace(stitched, std::move(new_bp));
+  }
+  breakpoints_ = std::move(remapped);
+  // refs_ should be empty at this point; if not, the existing refs will get
+  // the remapped breakpoints enabled via the next addRef or setBreakPoints call.
+}
+
 std::string_view File::path() const {
   return path_;
 }

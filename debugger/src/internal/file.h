@@ -34,6 +34,17 @@ class File {
   void setPath(std::string path);
   std::string_view path() const;
 
+  // Line offset between IDE-file lines and stitched-source lines.
+  // IDE line N corresponds to stitched line N + line_offset_.
+  void setLineOffset(int offset) { line_offset_ = offset; }
+  int lineOffset() const { return line_offset_; }
+
+  // Re-keys all stored breakpoints from IDE-line space into stitched-line
+  // space.  Must be called before addRef() so that the refs_ list is still
+  // empty (enableBreakPoint would be a no-op anyway) or the refs have not yet
+  // been activated.
+  void remapBreakpoints(int offset);
+
   void setBreakPoints(const std::unordered_map<int, BreakPoint>& breakpoints);
   void addRef(LuaFileRef ref);
   void removeRef(lua_State* L);
@@ -52,6 +63,7 @@ class File {
 
  private:
   std::string path_;
+  int line_offset_ = 0;
   std::unordered_map<int, BreakPoint> breakpoints_;
   std::vector<LuaFileRef> refs_;
 };

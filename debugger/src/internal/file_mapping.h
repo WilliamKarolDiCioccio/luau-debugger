@@ -19,6 +19,12 @@ class FileMapping {
     return entry_path_ == normalize(path);
   }
 
+  // Line at which the stop-on-entry breakpoint was placed (in stitched-source
+  // space).  For un-offset chunks this is always 1; for stitched sources it is
+  // line_offset + 1.
+  void setEntryBpLine(int line) { entry_bp_line_ = line; }
+  int entryBpLine() const { return entry_bp_line_; }
+
   std::string normalize(std::string_view path) const {
     if (path.empty())
       return std::string{};
@@ -41,6 +47,7 @@ class FileMapping {
   std::string lua_root_;
   std::string lua_file_extension_ = ".lua";
   std::string entry_path_;
+  int entry_bp_line_ = 1;
 };
 
 }  // namespace luau::debugger

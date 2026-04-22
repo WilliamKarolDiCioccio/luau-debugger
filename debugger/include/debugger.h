@@ -64,7 +64,8 @@ class Debugger {
   bool listen(int port);
   bool stop();
 
-  void onLuaFileLoaded(lua_State* L, std::string_view path, bool is_entry);
+  void onLuaFileLoaded(lua_State* L, std::string_view path, bool is_entry,
+                       int line_offset = 0);
   void onError(std::string_view msg, lua_State* L);
 
  private:
