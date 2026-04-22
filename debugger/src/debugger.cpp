@@ -56,7 +56,7 @@ bool Debugger::listen(int port) {
   using namespace dap::net;
   server_ = dap::net::Server::create();
   if (!server_->start(
-          "0.0.0.0", port, [this](const auto& rw) { onClientConnected(rw); },
+          port, [this](const auto& rw) { onClientConnected(rw); },
           [this](const char* msg) { onClientError(msg); })) {
     DEBUGGER_LOG_ERROR("Failed to start server on port {}", port);
     return false;
@@ -74,8 +74,9 @@ bool Debugger::stop() {
 
 void Debugger::onLuaFileLoaded(lua_State* L,
                                std::string_view path,
-                               bool is_entry) {
-  debug_bridge_->onLuaFileLoaded(L, path, is_entry);
+                               bool is_entry,
+                               int line_offset) {
+  debug_bridge_->onLuaFileLoaded(L, path, is_entry, line_offset);
 }
 
 void Debugger::onError(std::string_view msg, lua_State* L) {
@@ -120,7 +121,6 @@ void Debugger::onClientConnected(const std::shared_ptr<dap::ReaderWriter>& rw) {
   registerProtocolHandlers();
 
   session_->onError([this](const char* msg) { onSessionError(msg); });
-  session_->setOnInvalidData(dap::kClose);
   session_->bind(rw);
 
   DEBUGGER_LOG_INFO("Debugger client connected");

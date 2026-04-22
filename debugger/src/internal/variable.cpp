@@ -257,13 +257,9 @@ Variable Variable::addField(lua_State* L,
   std::string field_name = lua_utils::type::toString(L, -2);
   if (key_type == LUA_TNUMBER)
     field_name = std::format("[{}]", lua_tointeger(L, -2));
-  else if (key_type == LUA_TINTEGER)
-    field_name = std::format("[{}]", lua_tointeger64(L, -2, nullptr));
   auto variable = registry->createVariable(L, field_name, scope.getLevel());
   if (key_type == LUA_TNUMBER)
     variable.index_ = lua_tointeger(L, -2);
-  else if (key_type == LUA_TINTEGER)
-    variable.index_ = static_cast<int>(lua_tointeger64(L, -2, nullptr));
   return variable;
 }
 

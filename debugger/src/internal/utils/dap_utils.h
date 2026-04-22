@@ -1,6 +1,6 @@
 #pragma once
-#include <nlohmann_json_serializer.h>
 #include <concepts>
+#include <string>
 
 #include <dap/protocol.h>
 #include <dap/typeof.h>
@@ -19,11 +19,12 @@ concept Serializable =
     std::derived_from<T, dap::Request> || std::derived_from<T, dap::Event> ||
     std::derived_from<T, dap::Response>;
 
+// Logging-only helper: returns the DAP type name.
+// Full JSON serialization is intentionally omitted — NlohmannSerializer is a
+// cppdap-internal header not available via vcpkg.
 template <Serializable T>
 inline std::string toString(const T& t) {
-  dap::json::NlohmannSerializer s;
-  dap::TypeOf<T>::type()->serialize(&s, reinterpret_cast<const void*>(&t));
-  return s.dump();
+  return dap::TypeOf<T>::type()->name();
 }
 
 inline int clamp(std::size_t value) {
